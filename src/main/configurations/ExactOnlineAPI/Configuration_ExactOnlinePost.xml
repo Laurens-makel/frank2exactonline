@@ -4,45 +4,27 @@
             <JavaListener name="ExactOnlineApi"/>
         </Receiver>
 
-        <Pipeline firstPipe="StoreInvoice">
-
-            <PutInSessionPipe name="StoreInvoice" 
-                sessionKey="invoice" >
-                
-                <Forward name="success" path="StoreDate"/>
-            </PutInSessionPipe>
-
-            <PutInSessionPipe name="StoreDate" 
-                sessionKey="dummy" 
-                value="dummy">
-
+        <Pipeline firstPipe="Prepare session">
+	
+            <PutInSessionPipe name="Prepare session">
+                <Param name="invoice" sessionKey="originalMessage"/>
                 <Param name="date" xpathExpression="invoice/created-at"/>
+		    
                 <Forward name="success" path="GetCompany"/>
             </PutInSessionPipe>
 
-            <SenderPipe name="GetCompany">   
+            <SenderPipe name="GetCompany" storeResultInSessionKey="companyid">   
                 <IbisLocalSender javaListener="ExactOnlineGet"/>
-                <Forward name="success" path="StoreCompanyID"/>
+                <Forward name="success" path="ItemIteration"/>
             </SenderPipe>
 
-            <PutInSessionPipe name="StoreCompanyID" 
-                sessionKey="companyid" >
-                
-                <Forward name="success" path="Invoice"/>
-            </PutInSessionPipe>
-
-            <GetFromSessionPipe name="Invoice" sessionKey="invoice">
-                <Forward name="success" path="ItemIteration"/>
-            </GetFromSessionPipe>
-
-
-            <ForEachChildElementPipe name="ItemIteration" elementXPathExpression="invoice/items/item">
+            <ForEachChildElementPipe name="ItemIteration" getInputFromSessionKey="invoice" elementXPathExpression="invoice/items/item">
                 <IbisLocalSender javaListener="ExactOnlinePost"/>
 
                 <Forward name="success" path="filterID" />
             </ForEachChildElementPipe>
 
-            <XsltPipe name="filterID" removeNamespaces="true"  styleSheetName="xsl/invoiceJson.xsl">
+            <XsltPipe name="filterID" removeNamespaces="true" styleSheetName="xsl/invoiceJson.xsl">
                 <Param name="companyname" sessionKey="companyid"/>
                 <Forward name="success" path="PostInvoiceToExact"/>
             </XsltPipe>
@@ -61,7 +43,6 @@
                 <Param name="date" sessionKey="date"/>
                 <Forward name="success" path="OK"/>
             </XsltPipe>
-
 
             <Exit path="OK" state="success" code="200" />
             <Exit path="NotModified" state="success" code="304" empty="true" />
@@ -84,7 +65,6 @@
 
         <Pipeline firstPipe="CreateCode">
 
-
             <HashPipe name="CreateCode" 
             storeResultInSessionKey="code" 
             preserveInput="true" 
@@ -100,25 +80,14 @@
                 preserveInput="true" 
                 styleSheetName="xsl/removeMetaChars.xsl">
                 <Param name="code" sessionKey="code"/>
-                <Forward name="success" path="GetItemPrice" />
+                <Forward name="success" path="Prepare session amount and price" />
             </XsltPipe>
 
-            <PutInSessionPipe name="GetItemPrice" 
-                sessionKey="price" 
-                value="{price}">
-
-                <Param name="price" xpathExpression="item/price"/>
-                <Forward name="success" path="amount"/>
-            </PutInSessionPipe>
-
-            <PutInSessionPipe name="amount"
-                sessionKey="amount"
-                value="{amount}">
-
-                <Param name="amount" xpathExpression="item/amount"/>
+	    <PutInSessionPipe name="Prepare session amount and price">
+ 		<Param name="amount" xpathExpression="item/amount"/>
+		<Param name="price"  xpathExpression="item/price"/>
                 <Forward name="success" path="CreateItem"/>
             </PutInSessionPipe>
-
 
             <XsltPipe name="CreateItem" 
             styleSheetName="xsl/item.xsl" 
@@ -127,7 +96,6 @@
                 <Param name="code" sessionKey="cleanCode"/>
                 <Forward name="succes" path="PostItemToExact"/>
             </XsltPipe>
-
 
             <SenderPipe name="PostItemToExact">
                 <SenderSeriesSender>
@@ -155,7 +123,8 @@
             <PutInSessionPipe name="StoreItemID"
             	sessionKey="itemID"
            		value="/entry/content/properties/ID">
-            	
+
+		    
             	<Forward name="succes" path="FilterItemID"/>
             </PutInSessionPipe>
 
